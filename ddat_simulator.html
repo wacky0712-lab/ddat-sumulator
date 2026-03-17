@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>대동애그테크 지분 희석 시뮬레이터</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2535;
+    --bg4: #252d3f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8b93a8;
+    --text3: #555e72;
+    --accent: #4f8ef7;
+    --accent2: #2d6cf0;
+    --red: #e85757;
+    --red-bg: rgba(232,87,87,0.1);
+    --green: #3ecf7a;
+    --green-bg: rgba(62,207,122,0.1);
+    --amber: #f5a623;
+    --amber-bg: rgba(245,166,35,0.1);
+    --blue-bg: rgba(79,142,247,0.1);
+    --radius: 10px;
+    --radius-lg: 14px;
+    --font: 'Noto Sans KR', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Header */
+  .header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+  }
+  .logo-text { font-size: 14px; font-weight: 500; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--text2); margin-left: 4px; }
+  .header-meta { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+  /* Layout */
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 2rem 4rem; }
+
+  /* Alert */
+  .alert {
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .alert-icon { font-size: 14px; margin-top: 1px; flex-shrink: 0; }
+  .alert-red { background: var(--red-bg); border: 1px solid rgba(232,87,87,0.25); color: #f59595; }
+  .alert-blue { background: var(--blue-bg); border: 1px solid rgba(79,142,247,0.2); color: #93b8ff; }
+
+  /* Current holders */
+  .holders-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 1.5rem;
+  }
+  .holder-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 10px;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .holder-card:hover { border-color: var(--border2); }
+  .holder-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .holder-pct { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+  .holder-shares { font-size: 11px; color: var(--text3); margin-top: 3px; font-family: var(--mono); }
+  .holder-card.dominant .holder-pct { color: var(--red); }
+  .holder-card.investor .holder-pct { color: var(--accent); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--bg3);
+    border-radius: var(--radius);
+    padding: 4px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1; padding: 8px 12px;
+    font-size: 13px; font-family: var(--font);
+    cursor: pointer; border: none;
+    background: transparent; color: var(--text2);
+    border-radius: 7px;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text); background: var(--bg4); }
+  .tab.active { background: var(--bg4); color: var(--text); font-weight: 500; border: 1px solid var(--border2); }
+
+  /* Section */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Grid layout */
+  .two-col { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+
+  /* Controls panel */
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 11px; font-weight: 500; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Sliders */
+  .slider-group { margin-bottom: 18px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .slider-label { font-size: 12px; color: var(--text2); }
+  .slider-value { font-size: 14px; font-weight: 500; color: var(--text); font-family: var(--mono); }
+  input[type=range] {
+    width: 100%; height: 4px;
+    -webkit-appearance: none; appearance: none;
+    background: var(--bg4); border-radius: 2px; outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px;
+    background: var(--accent); border-radius: 50%;
+    border: 2px solid var(--bg);
+    transition: transform 0.15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type=range]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(79,142,247,0.25); }
+
+  /* Result cards */
+  .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+  .result-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  .result-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .result-value { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+  .rv-red { color: var(--red); }
+  .rv-green { color: var(--green); }
+  .rv-blue { color: var(--accent); }
+  .rv-amber { color: var(--amber); }
+  .rv-white { color: var(--text); }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-block; font-size: 10px; font-weight: 500;
+    padding: 2px 8px; border-radius: 999px;
+    margin-left: 6px; vertical-align: middle;
+    font-family: var(--mono);
+  }
+  .sb-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(62,207,122,0.3); }
+  .sb-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .sb-fail { background: var(--red-bg); color: var(--red); border: 1px solid rgba(232,87,87,0.3); }
+
+  /* Chart area */
+  .chart-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+  .chart-section-title {
+    font-size: 11px; font-weight: 500; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+  .donut-wrap {
+    display: flex; align-items: center; gap: 20px; margin-bottom: 20px;
+  }
+  .donut-canvas-wrap { position: relative; width: 160px; height: 160px; flex-shrink: 0; }
+  .donut-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    text-align: center; pointer-events: none;
+  }
+  .donut-center-pct { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+  .donut-center-lbl { font-size: 10px; color: var(--text3); }
+  .legend-list { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .legend-name { color: var(--text2); flex: 1; }
+  .legend-pct { font-family: var(--mono); font-size: 12px; color: var(--text); min-width: 40px; text-align: right; }
+  .legend-shares { font-family: var(--mono); font-size: 10px; color: var(--text3); min-width: 75px; text-align: right; }
+
+  /* Table */
+  .share-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    margin-top: 16px;
+  }
+  .share-table th {
+    font-size: 10px; color: var(--text3); font-weight: 500;
+    padding: 6px 10px; text-align: right;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .share-table th:first-child { text-align: left; }
+  .share-table td {
+    padding: 7px 10px; text-align: right;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; color: var(--text2);
+  }
+  .share-table td:first-child { text-align: left; font-family: var(--font); color: var(--text); }
+  .share-table .row-highlight td { background: rgba(79,142,247,0.04); }
+  .share-table .row-daedong td { color: var(--text); font-weight: 500; }
+  .share-table .row-new td { color: var(--green); }
+  .share-table .row-total td { color: var(--text2); border-top: 1px solid var(--border2); border-bottom: none; }
+  .share-table .arrow { color: var(--text3); margin: 0 4px; }
+
+  /* Steps (Pre-IPO procedure) */
+  .steps { margin-top: 16px; }
+  .step { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+  .step-num {
+    min-width: 22px; height: 22px; background: var(--accent2);
+    border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .step-text { font-size: 12px; color: var(--text2); line-height: 1.6; padding-top: 2px; }
+  .step-text strong { color: var(--text); font-weight: 500; }
+
+  /* Risk section */
+  .risk-item {
+    display: flex; gap: 12px; padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-icon {
+    width: 32px; height: 32px; border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .risk-icon.red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(232,87,87,0.2); }
+  .risk-icon.amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+  .risk-icon.blue { background: var(--blue-bg); color: var(--accent); border: 1px solid rgba(79,142,247,0.2); }
+  .risk-content h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .risk-content p { font-size: 12px; color: var(--text2); line-height: 1.6; }
+  .risk-tag {
+    display: inline-block; font-size: 10px; padding: 1px 7px;
+    border-radius: 999px; margin-left: 6px; vertical-align: middle;
+  }
+  .tag-red { background: var(--red-bg); color: var(--red); }
+  .tag-amber { background: var(--amber-bg); color: var(--amber); }
+  .tag-blue { background: var(--blue-bg); color: var(--accent); }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 2rem;
+    font-size: 11px; color: var(--text3);
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  /* Progress bar */
+  .progress-wrap { margin-top: 12px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+  .progress-bar { height: 6px; background: var(--bg4); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+
+  @media(max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+    .holders-grid { grid-template-columns: repeat(3, 1fr); }
+    .result-grid { grid-template-columns: repeat(2, 1fr); }
+    .container { padding: 1rem 1rem 3rem; }
+    .donut-wrap { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">DA</div>
+    <span class="logo-text">대동애그테크</span>
+    <span class="logo-sub">지분 희석 시뮬레이터</span>
+  </div>
+  <div class="header-meta">기준일: 2026.03.12 주주명부 · 총 359,318주</div>
+</header>
+
+<div class="container">
+
+  <!-- Current shareholders -->
+  <div class="holders-grid">
+    <div class="holder-card dominant">
+      <div class="holder-label">㈜대동</div>
+      <div class="holder-pct">66.8%</div>
+      <div class="holder-shares">240,000주</div>
+    </div>
+    <div class="holder-card">
+      <div class="holder-label">김준식</div>
+      <div class="holder-pct">8.7%</div>
+      <div class="holder-shares">31,083주</div>
+    </div>
+    <div class="holder-card">
+      <div class="holder-label">원유현</div>
+      <div class="holder-pct">4.3%</div>
+      <div class="holder-shares">15,541주</div>
+    </div>
+    <div class="holder-card investor">
+      <div class="holder-label">산업은행</div>
+      <div class="holder-pct">13.5%</div>
+      <div class="holder-shares">48,463주</div>
+    </div>
+    <div class="holder-card investor">
+      <div class="holder-label">스마일게이트</div>
+      <div class="holder-pct">6.7%</div>
+      <div class="holder-shares">24,231주</div>
+    </div>
+  </div>
+
+  <div class="alert alert-red">
+    <span class="alert-icon">!</span>
+    <div>
+      <strong>규제 핵심</strong> — 상장 모회사(㈜대동)가 30% 이상 지분을 보유한 비상장 자회사는 신규 상장 원칙적 불허 (2026.03.18 간담회 발표 예정).
+      현재 ㈜대동 <strong>66.8%</strong> → 최소 <strong>36.8%p 희석</strong> 필요. 신주 발행 전 기존 투자자(산업은행·스마일게이트) 서면 동의 필수 (계약 제8조).
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('sb',this)">시리즈B</button>
+    <button class="tab" onclick="showTab('pi',this)">Pre-IPO</button>
+    <button class="tab" onclick="showTab('cb',this)">병행 시나리오</button>
+    <button class="tab" onclick="showTab('rk',this)">IPO 이후 리스크</button>
+  </div>
+
+  <!-- SERIES B -->
+  <div id="sb" class="section active">
+    <div class="two-col">
+      <div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">파라미터</div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-label">발행가</span>
+              <span class="slider-value" id="sb-p-o">350,000원</span>
+            </div>
+            <input type="range" min="100000" max="1000000" step="10000" value="350000" id="sb-p" oninput="cSB()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <span class="slider-label">투자 규모</span>
+              <span class="slider-value" id="sb-a-o">300억원</span>
+            </div>
+            <input type="range" min="50" max="2000" step="50" value="300" id="sb-a" oninput="cSB()">
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>대동 희석 진행도</span><span id="sb-progress-lbl">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="sb-progress-fill" style="background:var(--red)"></div></div>
+          </div>
+        </div>
+        <div class="result-grid" id="sb-r"></div>
+        <div class="alert alert-blue" style="font-size:12px">
+          <span class="alert-icon">i</span>
+          <div>신주 발행으로 기존 투자자(산업은행·스마일게이트) 지분도 함께 희석됨. 제11조 우선청약권 감안 필요.</div>
+        </div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-section-title">발행 후 지분 구조</div>
+        <div class="donut-wrap">
+          <div class="donut-canvas-wrap">
+            <canvas id="sbC"></canvas>
+            <div class="donut-center">
+              <div class="donut-center-pct rv-red" id="sb-donut-pct">66.8%</div>
+              <div class="donut-center-lbl">㈜대동</div>
+            </div>
+          </div>
+          <div class="legend-list" id="sb-legend"></div>
+        </div>
+        <div id="sb-t"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRE-IPO -->
+  <div id="pi" class="section">
+    <div class="two-col">
+      <div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">파라미터</div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">발행가</span><span class="slider-value" id="pi-p-o">500,000원</span></div>
+            <input type="range" min="100000" max="1500000" step="10000" value="500000" id="pi-p" oninput="cPI()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">대동 구주 매출 비율</span><span class="slider-value" id="pi-s-o">30%</span></div>
+            <input type="range" min="0" max="80" step="5" value="30" id="pi-s" oninput="cPI()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">신주 발행 금액</span><span class="slider-value" id="pi-a-o">100억원</span></div>
+            <input type="range" min="0" max="1000" step="50" value="100" id="pi-a" oninput="cPI()">
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>대동 희석 진행도</span><span id="pi-progress-lbl">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="pi-progress-fill" style="background:var(--red)"></div></div>
+          </div>
+        </div>
+        <div class="result-grid" id="pi-r"></div>
+        <div class="panel">
+          <div class="panel-title">구주 매출 거래 절차</div>
+          <div class="steps">
+            <div class="step"><div class="step-num">1</div><div class="step-text"><strong>투자자 물색 및 NDA</strong> — PEF·SI·VC 대상 IM 발송. 기밀유지 계약 선행.</div></div>
+            <div class="step"><div class="step-num">2</div><div class="step-text"><strong>우선매수권 통지 (제18조)</strong> — 양도예정일 30일 전 산업은행·스마일게이트에 서면 통지. 30일 내 미행사 시 제3자 매각 가능.</div></div>
+            <div class="step"><div class="step-num">3</div><div class="step-text"><strong>DD 및 SHA 체결</strong> — 신규 투자자에게 기존 투자자 수준 보호 조항(Put Option·공동매도권) 부여 여부 협의.</div></div>
+            <div class="step"><div class="step-num">4</div><div class="step-text"><strong>대금 결제 및 주주명부 변경</strong> — 구주는 대동→신규 투자자 명의 이전. 신주는 이사회 결의 후 발행·등기.</div></div>
+            <div class="step"><div class="step-num">5</div><div class="step-text"><strong>공동매도참여권 검토 (제19조)</strong> — 신규 투자자 취득 비율이 크면 기존 투자자 발동 가능성 점검.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-section-title">발행 후 지분 구조</div>
+        <div class="donut-wrap">
+          <div class="donut-canvas-wrap">
+            <canvas id="piC"></canvas>
+            <div class="donut-center">
+              <div class="donut-center-pct rv-red" id="pi-donut-pct">66.8%</div>
+              <div class="donut-center-lbl">㈜대동</div>
+            </div>
+          </div>
+          <div class="legend-list" id="pi-legend"></div>
+        </div>
+        <div id="pi-t"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMBINED -->
+  <div id="cb" class="section">
+    <div class="two-col">
+      <div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">시리즈B 파라미터</div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">시리즈B 규모</span><span class="slider-value" id="cb-sa-o">300억원</span></div>
+            <input type="range" min="0" max="3000" step="50" value="300" id="cb-sa" oninput="cCB()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">시리즈B 발행가</span><span class="slider-value" id="cb-sp-o">350,000원</span></div>
+            <input type="range" min="100000" max="1000000" step="10000" value="350000" id="cb-sp" oninput="cCB()">
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">Pre-IPO 파라미터</div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">구주 매출 비율</span><span class="slider-value" id="cb-sec-o">30%</span></div>
+            <input type="range" min="0" max="80" step="5" value="30" id="cb-sec" oninput="cCB()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">신주 발행 금액</span><span class="slider-value" id="cb-pa-o">150억원</span></div>
+            <input type="range" min="0" max="1500" step="50" value="150" id="cb-pa" oninput="cCB()">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span class="slider-label">Pre-IPO 발행가</span><span class="slider-value" id="cb-pp-o">500,000원</span></div>
+            <input type="range" min="100000" max="1500000" step="10000" value="500000" id="cb-pp" oninput="cCB()">
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>대동 희석 진행도</span><span id="cb-progress-lbl">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="cb-progress-fill" style="background:var(--red)"></div></div>
+          </div>
+        </div>
+        <div class="result-grid" id="cb-r"></div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-section-title">최종 지분 구조</div>
+        <div class="donut-wrap">
+          <div class="donut-canvas-wrap">
+            <canvas id="cbC"></canvas>
+            <div class="donut-center">
+              <div class="donut-center-pct rv-red" id="cb-donut-pct">66.8%</div>
+              <div class="donut-center-lbl">㈜대동</div>
+            </div>
+          </div>
+          <div class="legend-list" id="cb-legend"></div>
+        </div>
+        <div id="cb-t"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RISKS -->
+  <div id="rk" class="section">
+    <div class="panel">
+      <div class="panel-title">IPO 이후 ㈜대동 지분 30% 미만 시 주요 리스크</div>
+      <div class="risk-item">
+        <div class="risk-icon red">1</div>
+        <div class="risk-content">
+          <h4>경영권 상실 위험 <span class="risk-tag tag-red">HIGH</span></h4>
+          <p>㈜대동(30% 미만) + 김준식·원유현 개인 지분 합산 시, IPO 공모 물량(20%) 반영 후 대동그룹 전체 지배력 50% 미만 하락 가능. 포이즌필·차등의결권 등 방어 기제 없음. 적대적 M&A 방어 수단 부재.</p>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon amber">2</div>
+        <div class="risk-content">
+          <h4>연결 재무제표 제외 위험 <span class="risk-tag tag-amber">MEDIUM-HIGH</span></h4>
+          <p>㈜대동 지분 30% 미만 시 회계 기준상 '관계기업' 처리(지분법 평가)로 전환 가능. ㈜대동의 연결 매출·자산 규모 축소 → 신용등급 및 차입 여력에 부정적 영향.</p>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon amber">3</div>
+        <div class="risk-content">
+          <h4>투자자 Put Option 연동 리스크 <span class="risk-tag tag-amber">MEDIUM-HIGH</span></h4>
+          <p>지분 희석 과정에서 기존 투자자 동의 없이 진행 시 제20조 주식매수청구권 발동 가능. ㈜대동이 구주 매각으로 현금화해도 Put Option 의무(연복리 12%)는 이해관계인에 귀속.</p>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon blue">4</div>
+        <div class="risk-content">
+          <h4>보호예수 해제 후 오버행 리스크 <span class="risk-tag tag-blue">IPO 직후</span></h4>
+          <p>상장 후 6개월 보호예수 종료 시 대규모 매도 물량 우려 → 주가 하락 압력. 구주 매출 이력이 있으면 시장이 추가 매각 신호로 해석. 장기 보호예수 자율 공약 권고.</p>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon blue">5</div>
+        <div class="risk-content">
+          <h4>내부거래 공시 및 일감 몰아주기 규제 <span class="risk-tag tag-blue">MEDIUM</span></h4>
+          <p>상장 후 대동그룹과의 내부거래(스마트팜 판매, 그룹 SI사업 등) 공시 의무. 공정거래법 제45조 일감 몰아주기 규제 적용 여부 점검. 독립성 소명 없이는 IPO 심사 자체가 어려울 수 있음.</p>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon red">6</div>
+        <div class="risk-content">
+          <h4>Series A 특약 위반 가능성 <span class="risk-tag tag-red">HIGH</span></h4>
+          <p>계약 제35조 — 대동에이아이아랩 지분 70% 유지 의무. 대동 지분 희석 과정에서 이 특약과 충돌 여부 별도 법무 검토 필수. 위반 시 투자자 즉시 Put Option(연복리 12%) 행사 가능.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  대동애그테크 내부 검토용 자료 · 법적 효력 없음 · 최종 판단은 법무 전문가 자문을 통해 이루어져야 합니다
+</footer>
+
+<script>
+const TOTAL = 359318;
+const H = [
+  { n:'㈜대동',       s:240000, c:'#e85757' },
+  { n:'김준식',       s:31083,  c:'#6b7590' },
+  { n:'원유현',       s:15541,  c:'#464f63' },
+  { n:'산업은행',     s:48463,  c:'#4f8ef7' },
+  { n:'스마일게이트', s:24231,  c:'#2d6cf0' },
+];
+const charts = {};
+
+function f(n){ return Math.round(n).toLocaleString('ko-KR'); }
+function fp(n){ return n.toFixed(1) + '%'; }
+
+function bdg(p){
+  if(p < 30) return '<span class="status-badge sb-ok">규제 해소</span>';
+  if(p < 50) return '<span class="status-badge sb-warn">진행 중</span>';
+  return '<span class="status-badge sb-fail">미달</span>';
+}
+
+function pctColor(p){
+  if(p < 30) return 'rv-green';
+  if(p < 50) return 'rv-amber';
+  return 'rv-red';
+}
+
+function updateProgress(fillId, lblId, before, after){
+  const need = before - 30;
+  const done = Math.max(0, before - after);
+  const pct = need > 0 ? Math.min(100, (done / need) * 100) : 100;
+  const fill = document.getElementById(fillId);
+  const lbl = document.getElementById(lblId);
+  if(fill) {
+    fill.style.width = pct.toFixed(0) + '%';
+    fill.style.background = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--amber)' : 'var(--red)';
+  }
+  if(lbl) lbl.textContent = pct.toFixed(0) + '%';
+}
+
+function buildDonut(canvasId, labels, data, colors, centerPctId, centerPct){
+  if(charts[canvasId]) charts[canvasId].destroy();
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return;
+  charts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverBorderWidth: 2, hoverBorderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => '  ' + c.label + ': ' + c.parsed.toFixed(1) + '%' },
+          backgroundColor: '#1e2535', titleColor: '#e8eaf0', bodyColor: '#8b93a8',
+          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, padding: 10 }
+      }
+    }
+  });
+  const el = document.getElementById(centerPctId);
+  if(el){
+    el.textContent = fp(centerPct);
+    el.className = 'donut-center-pct ' + pctColor(centerPct);
+  }
+}
+
+function buildLegend(id, labels, data, colors, shares){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.innerHTML = labels.map((l,i) => `
+    <div class="legend-item">
+      <span class="legend-dot" style="background:${colors[i]}"></span>
+      <span class="legend-name">${l}</span>
+      <span class="legend-pct">${data[i].toFixed(1)}%</span>
+      <span class="legend-shares">${f(shares[i])}주</span>
+    </div>`).join('');
+}
+
+function buildTable(id, rows){
+  const el = document.getElementById(id);
+  if(!el) return;
+  let h = `<table class="share-table">
+    <thead><tr><th>주주</th><th>현재</th><th></th><th>이후</th><th>현재 %</th><th>이후 %</th></tr></thead><tbody>`;
+  rows.forEach(r => {
+    const cls = r.n === '㈜대동' ? 'row-daedong' : r.n.includes('투자자') ? 'row-new' : r.n === '합계' ? 'row-total' : '';
+    h += `<tr class="${cls}">
+      <td>${r.n}</td>
+      <td>${f(r.b)}</td>
+      <td class="arrow">→</td>
+      <td>${f(r.a)}</td>
+      <td>${fp(r.bp)}</td>
+      <td>${fp(r.ap)}${r.n === '㈜대동' ? bdg(r.ap) : ''}</td>
+    </tr>`;
+  });
+  h += '</tbody></table>';
+  el.innerHTML = h;
+}
+
+function buildResultCards(id, cards){
+  document.getElementById(id).innerHTML = cards.map(c =>
+    `<div class="result-card">
+      <div class="result-label">${c.label}</div>
+      <div class="result-value ${c.cls}">${c.val}</div>
+    </div>`).join('');
+}
+
+function cSB(){
+  const p = +document.getElementById('sb-p').value;
+  const a = +document.getElementById('sb-a').value * 1e8;
+  document.getElementById('sb-p-o').textContent = f(p) + '원';
+  document.getElementById('sb-a-o').textContent = (a/1e8).toFixed(0) + '억원';
+  const ns = Math.round(a/p), nt = TOTAL + ns;
+  const dp = (H[0].s / nt) * 100;
+  buildResultCards('sb-r', [
+    { label:'신규 발행 주수', val: f(ns) + '주', cls:'rv-blue' },
+    { label:'발행 후 총 주식수', val: f(nt) + '주', cls:'rv-white' },
+    { label:'시리즈B 지분율', val: fp((ns/nt)*100), cls:'rv-blue' },
+    { label:'대동 이후 지분율', val: fp(dp), cls: pctColor(dp) },
+  ]);
+  updateProgress('sb-progress-fill','sb-progress-lbl', 66.8, dp);
+  const lb = [...H.map(h=>h.n), '시리즈B 투자자'];
+  const da = [...H.map(h=>(h.s/nt)*100), (ns/nt)*100];
+  const co = [...H.map(h=>h.c), '#3ecf7a'];
+  const sh = [...H.map(h=>h.s), ns];
+  buildDonut('sbC', lb, da, co, 'sb-donut-pct', dp);
+  buildLegend('sb-legend', lb, da, co, sh);
+  const rows = H.map(h=>({n:h.n,b:h.s,a:h.s,bp:(h.s/TOTAL)*100,ap:(h.s/nt)*100}));
+  rows.push({n:'시리즈B 투자자',b:0,a:ns,bp:0,ap:(ns/nt)*100});
+  rows.push({n:'합계',b:TOTAL,a:nt,bp:100,ap:100});
+  buildTable('sb-t', rows);
+}
+
+function cPI(){
+  const p = +document.getElementById('pi-p').value;
+  const sp = +document.getElementById('pi-s').value / 100;
+  const a = +document.getElementById('pi-a').value * 1e8;
+  document.getElementById('pi-p-o').textContent = f(p) + '원';
+  document.getElementById('pi-s-o').textContent = (sp*100).toFixed(0) + '%';
+  document.getElementById('pi-a-o').textContent = (a/1e8).toFixed(0) + '억원';
+  const ss = Math.round(H[0].s * sp), ps = Math.round(a/p), nt = TOTAL + ps;
+  const dp = ((H[0].s - ss) / nt) * 100;
+  const inv = ss + ps;
+  buildResultCards('pi-r', [
+    { label:'대동 매각 주수', val: f(ss) + '주', cls:'rv-amber' },
+    { label:'신주 발행 주수', val: f(ps) + '주', cls:'rv-blue' },
+    { label:'투자자 취득 주수', val: f(inv) + '주', cls:'rv-white' },
+    { label:'대동 이후 지분율', val: fp(dp), cls: pctColor(dp) },
+  ]);
+  updateProgress('pi-progress-fill','pi-progress-lbl', 66.8, dp);
+  const lb = ['㈜대동(잔여)','김준식','원유현','산업은행','스마일게이트','Pre-IPO 투자자'];
+  const da = [((H[0].s-ss)/nt)*100, ...H.slice(1).map(h=>(h.s/nt)*100), (inv/nt)*100];
+  const co = ['#e85757','#6b7590','#464f63','#4f8ef7','#2d6cf0','#f5a623'];
+  const sh = [H[0].s-ss, ...H.slice(1).map(h=>h.s), inv];
+  buildDonut('piC', lb, da, co, 'pi-donut-pct', dp);
+  buildLegend('pi-legend', lb, da, co, sh);
+  const rows = [
+    {n:'㈜대동',b:H[0].s,a:H[0].s-ss,bp:(H[0].s/TOTAL)*100,ap:((H[0].s-ss)/nt)*100},
+    ...H.slice(1).map(h=>({n:h.n,b:h.s,a:h.s,bp:(h.s/TOTAL)*100,ap:(h.s/nt)*100})),
+    {n:'Pre-IPO 투자자',b:0,a:inv,bp:0,ap:(inv/nt)*100},
+    {n:'합계',b:TOTAL,a:nt,bp:100,ap:100},
+  ];
+  buildTable('pi-t', rows);
+}
+
+function cCB(){
+  const sa = +document.getElementById('cb-sa').value * 1e8;
+  const sp = +document.getElementById('cb-sp').value;
+  const sec = +document.getElementById('cb-sec').value / 100;
+  const pa = +document.getElementById('cb-pa').value * 1e8;
+  const pp = +document.getElementById('cb-pp').value;
+  document.getElementById('cb-sa-o').textContent = (sa/1e8).toFixed(0) + '억원';
+  document.getElementById('cb-sp-o').textContent = f(sp) + '원';
+  document.getElementById('cb-sec-o').textContent = (sec*100).toFixed(0) + '%';
+  document.getElementById('cb-pa-o').textContent = (pa/1e8).toFixed(0) + '억원';
+  document.getElementById('cb-pp-o').textContent = f(pp) + '원';
+  const sbNS = Math.round(sa/sp);
+  const after1 = TOTAL + sbNS;
+  const ss = Math.round(H[0].s * sec);
+  const piNS = Math.round(pa/pp);
+  const ft = after1 + piNS;
+  const dp = ((H[0].s - ss) / ft) * 100;
+  const total = (sa + pa) / 1e8;
+  buildResultCards('cb-r', [
+    { label:'시리즈B 신주', val: f(sbNS) + '주', cls:'rv-blue' },
+    { label:'Pre-IPO 구주 매출', val: f(ss) + '주', cls:'rv-amber' },
+    { label:'총 신규 조달', val: total.toFixed(0) + '억원', cls:'rv-white' },
+    { label:'대동 최종 지분율', val: fp(dp), cls: pctColor(dp) },
+  ]);
+  updateProgress('cb-progress-fill','cb-progress-lbl', 66.8, dp);
+  const lb = ['㈜대동(잔여)','김준식','원유현','산업은행','스마일게이트','시리즈B','Pre-IPO'];
+  const da = [
+    ((H[0].s-ss)/ft)*100,
+    ...H.slice(1).map(h=>(h.s/ft)*100),
+    (sbNS/ft)*100,
+    ((ss+piNS)/ft)*100,
+  ];
+  const co = ['#e85757','#6b7590','#464f63','#4f8ef7','#2d6cf0','#3ecf7a','#f5a623'];
+  const sh = [H[0].s-ss, ...H.slice(1).map(h=>h.s), sbNS, ss+piNS];
+  buildDonut('cbC', lb, da, co, 'cb-donut-pct', dp);
+  buildLegend('cb-legend', lb, da, co, sh);
+  const rows = [
+    {n:'㈜대동',b:H[0].s,a:H[0].s-ss,bp:(H[0].s/TOTAL)*100,ap:((H[0].s-ss)/ft)*100},
+    ...H.slice(1).map(h=>({n:h.n,b:h.s,a:h.s,bp:(h.s/TOTAL)*100,ap:(h.s/ft)*100})),
+    {n:'시리즈B 투자자',b:0,a:sbNS,bp:0,ap:(sbNS/ft)*100},
+    {n:'Pre-IPO 투자자',b:0,a:ss+piNS,bp:0,ap:((ss+piNS)/ft)*100},
+    {n:'합계',b:TOTAL,a:ft,bp:100,ap:100},
+  ];
+  buildTable('cb-t', rows);
+}
+
+function showTab(id, el){
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+  if(id === 'sb') setTimeout(cSB, 50);
+  if(id === 'pi') setTimeout(cPI, 50);
+  if(id === 'cb') setTimeout(cCB, 50);
+}
+
+cSB();
+</script>
+</body>
+</html>
